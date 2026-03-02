@@ -52,7 +52,7 @@ The interactive dashboard was built in R Flexdashboard and presents findings acr
 
 | File | Description |
 |---|---|
-| `loan_approval_analysis.R` | Full R script - data cleaning, validation, feature engineering, analysis, and visualizations |
+| `Credit_Risk_Analysis.R` | Full R script - data cleaning, validation, feature engineering, analysis, and visualizations |
 | `loan_dashboard.Rmd` | R Markdown flexdashboard source file |
 | `loan_approval.csv` | Dataset - 2,000 loan applications |
 
