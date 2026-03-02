@@ -1,0 +1,181 @@
+---
+title: "Loan Approval Analysis"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: rows
+    theme: cosmo
+---
+```{r setup, include=FALSE}
+library(flexdashboard)
+library(tidyverse)
+library(ggplot2)
+
+loan_data <- read.csv("loan_data_clean.csv", stringsAsFactors = FALSE) %>%
+  mutate(
+    loan_approved = as.logical(loan_approved),
+    credit_category = factor(credit_category, levels = c("Poor", "Fair", "Good", "Excellent")),
+    employment_level = factor(employment_level, levels = c("Entry (0-10 yrs)", "Mid (11-25 yrs)", "Senior (26+ yrs)")),
+    debt_burden_category = factor(debt_burden_category, levels = c("Low (<20%)", "Moderate (20-40%)", "High (≥40%)"))
+  )
+
+colors <- c("Poor" = "#d32f2f", "Fair" = "#ff9800", "Good" = "#9ccc65", "Excellent" = "#388e3c")
+```
+
+Row {data-height=90}
+-----------------------------------------------------------------------
+
+### Total
+```{r}
+valueBox("2,000", caption = "Applications", icon = "fa-users", color = "#607D8B")
+```
+
+### Approved
+```{r}
+valueBox("44%", caption = "879 Approved", icon = "fa-check", color = "#4CAF50")
+```
+
+### High-Value
+```{r}
+valueBox("405", caption = "$40k+ Loans (20%)", icon = "fa-dollar-sign", color = "#FF9800")
+```
+
+### Mean Score
+```{r}
+valueBox("574", caption = "Avg Credit Score", icon = "fa-line-chart", color = "#2196F3")
+```
+
+### Critical
+```{r}
+valueBox("0/195", caption = "Poor Credit ($40k+)", icon = "fa-warning", color = "#F44336")
+```
+
+Row {data-height=455}
+-----------------------------------------------------------------------
+
+### Credit Score Drives Approval
+```{r fig.height=5.5}
+q1 <- loan_data %>%
+  group_by(credit_category, employment_level) %>%
+  summarise(rate = mean(loan_approved) * 100, .groups = "drop")
+
+ggplot(q1, aes(employment_level, credit_category, fill = rate)) +
+  geom_tile(color = "white", linewidth = 2.5) +
+  geom_text(aes(label = paste0(round(rate), "%")), 
+            color = "white", size = 10, fontface = "bold") +
+  scale_fill_gradient2(low = "#d32f2f", mid = "#ff9800", high = "#388e3c",
+                       midpoint = 50, limits = c(0, 100)) +
+  labs(x = NULL, y = NULL) +
+  guides(fill = "none") +
+  theme_minimal(base_size = 14) +
+  theme(axis.text = element_text(face = "bold", size = 13),
+        panel.grid = element_blank(),
+        plot.margin = margin(20, 20, 20, 20))
+```
+
+### Debt Burden Impact
+```{r fig.height=5.5}
+q3 <- loan_data %>%
+  group_by(debt_burden_category, credit_category) %>%
+  summarise(rate = mean(loan_approved) * 100, .groups = "drop")
+
+ggplot(q3, aes(debt_burden_category, rate, color = credit_category, group = credit_category)) +
+  geom_line(linewidth = 3.5) +
+  geom_point(size = 8) +
+  geom_text(aes(label = paste0(round(rate), "%")), 
+            vjust = -1.5, size = 5.5, fontface = "bold", color = "#212121", show.legend = FALSE) +
+  scale_color_manual(values = colors, name = NULL) +
+  scale_y_continuous(limits = c(0, 120), breaks = seq(0, 100, 25)) +
+  labs(x = NULL, y = "Approval %") +
+  theme_minimal(base_size = 14) +
+  theme(axis.text = element_text(face = "bold", size = 12),
+        axis.title = element_text(face = "bold", size = 13),
+        legend.position = "bottom",
+        legend.text = element_text(size = 13, face = "bold"),
+        panel.grid.minor = element_blank(),
+        plot.margin = margin(20, 20, 20, 20))
+```
+
+### High-Value Loans ($40k+): Best Combinations
+```{r fig.height=5.5}
+q2 <- loan_data %>% 
+  filter(high_loan) %>%
+  group_by(credit_category, employment_level) %>%
+  summarise(
+    n = n(),
+    rate = mean(loan_approved) * 100, 
+    .groups = "drop"
+  ) %>%
+  filter(n >= 5) %>%
+  arrange(desc(rate)) %>%
+  mutate(combo = paste(credit_category, employment_level, sep = " + "))
+
+ggplot(q2, aes(reorder(combo, rate), rate, fill = credit_category)) +
+  geom_col(width = 0.8) +
+  geom_text(aes(label = paste0(round(rate), "%")), 
+            hjust = 1.1, size = 4, fontface = "bold", color = "white") +
+  scale_fill_manual(values = colors) +
+  coord_flip() +
+  scale_y_continuous(limits = c(0, 110), breaks = seq(0, 100, 25)) +
+  labs(x = NULL, y = "Approval %") +
+  guides(fill = "none") +
+  theme_minimal(base_size = 11) +
+  theme(axis.text.y = element_text(face = "bold", size = 10),
+        axis.text.x = element_text(face = "bold", size = 11),
+        axis.title = element_text(face = "bold", size = 12),
+        panel.grid.major.y = element_blank(),
+        plot.margin = margin(20, 25, 20, 20))
+```
+
+Row {data-height=455}
+-----------------------------------------------------------------------
+
+### Application Volume {data-width=600}
+```{r fig.height=5.5}
+vol <- loan_data %>%
+  group_by(credit_category) %>%
+  summarise(total = n(), approved = sum(loan_approved), 
+            rate = mean(loan_approved) * 100, .groups = "drop")
+
+ggplot(vol, aes(credit_category, total, fill = credit_category)) +
+  geom_col(width = 0.7, alpha = 0.3) +
+  geom_col(aes(y = approved), width = 0.7) +
+  geom_text(aes(y = total, label = total), 
+            vjust = -0.6, size = 6, fontface = "bold", color = "#212121") +
+  geom_text(aes(y = approved, label = paste0(approved, "\n(", round(rate), "%)")), 
+            vjust = 1.5, size = 5, fontface = "bold", color = "white") +
+  scale_fill_manual(values = colors) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.1))) +
+  labs(x = NULL, y = "Applications") +
+  guides(fill = "none") +
+  theme_minimal(base_size = 14) +
+  theme(axis.text = element_text(face = "bold", size = 13),
+        axis.title = element_text(face = "bold", size = 14),
+        panel.grid.major.x = element_blank(),
+        plot.margin = margin(20, 20, 20, 20))
+```
+
+### Key Metrics {data-width=400}
+```{r}
+metrics <- data.frame(
+  stringsAsFactors = FALSE,
+  Category = c("**CREDIT SCORE**", "Poor (300-579)", "Fair (580-669)", 
+               "Good (670-739)", "Excellent (740+)", "",
+               "**EMPLOYMENT**", "Entry (0-10y)", "Mid (11-25y)", "Senior (26+y)", "",
+               "**DEBT BURDEN**", "Low (<20%)", "Moderate (20-40%)", "High (≥40%)", "",
+               "**HIGH-VALUE ($40k+)**", "Total apps", "Poor credit", "Excellent credit"),
+  Count = c("", "1,008", "322", "255", "415", "",
+            "", "527", "735", "738", "",
+            "", "691", "739", "570", "",
+            "", "405", "195", "80"),
+  Rate = c("", "7.8%", "56.5%", "82.4%", "98.3%", "",
+           "", "33.0%", "47.9%", "47.8%", "",
+           "", "57.9%", "42.6%", "28.8%", "",
+           "", "39.3%", "0%", "98.8%")
+)
+
+knitr::kable(metrics, col.names = c("", "Apps", "Approval"), align = c("l", "r", "r")) %>%
+  kableExtra::kable_styling(bootstrap_options = c("striped", "condensed"), 
+                           full_width = TRUE, font_size = 14, position = "left") %>%
+  kableExtra::row_spec(0, bold = TRUE, color = "white", background = "#2196F3") %>%
+  kableExtra::row_spec(c(1, 7, 12, 17), bold = TRUE, background = "#E8F5E9", font_size = 15)
+```
